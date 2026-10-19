@@ -25,48 +25,52 @@ export const HomeScreen: React.FC<HomeProps> = ({
     width: "100%",
     padding: "16px 20px",
     fontSize: 24,
-    fontWeight: 800,
+    fontWeight: 900,
     borderRadius: 14,
-    color: "#ffffff",
     cursor: "pointer",
     fontFamily: "inherit",
+    letterSpacing: 1,
   };
   const orange: React.CSSProperties = {
     ...base,
-    border: "3px solid #9a3412",
+    fontSize: 34,
+    color: "#ffffff",
+    border: "3px solid #7c2d12",
     background: "linear-gradient(#fb923c, #ea580c)",
-    boxShadow: "0 5px 0 #9a3412",
-    fontSize: 32,
+    boxShadow: "0 5px 0 #7c2d12",
   };
-  const purple: React.CSSProperties = {
+  const teal: React.CSSProperties = {
     ...base,
-    border: "3px solid #4c1d95",
-    background: "linear-gradient(#a78bfa, #6d28d9)",
-    boxShadow: "0 5px 0 #4c1d95",
+    color: "#ffffff",
+    border: "3px solid #0b3b42",
+    background: "linear-gradient(#1d9aa8, #14707a)",
+    boxShadow: "0 5px 0 #0b3b42",
   };
-  const green: React.CSSProperties = {
+  const gold: React.CSSProperties = {
     ...base,
-    border: "3px solid #14532d",
-    background: "linear-gradient(#4ade80, #16a34a)",
-    boxShadow: "0 5px 0 #14532d",
+    color: "#3b0a0a",
+    border: "3px solid #8a5a00",
+    background: "linear-gradient(#fcd34d, #f5b82e)",
+    boxShadow: "0 5px 0 #8a5a00",
   };
-  const blue: React.CSSProperties = {
+  const navy: React.CSSProperties = {
     ...base,
-    border: "3px solid #1e3a8a",
-    background: "linear-gradient(#60a5fa, #1d4ed8)",
-    boxShadow: "0 5px 0 #1e3a8a",
+    fontSize: 20,
+    color: "#f5b82e",
+    border: "3px solid #f5b82e",
+    background: "#0b1b3a",
+    boxShadow: "0 5px 0 #050d1f",
   };
   const small: React.CSSProperties = {
     flex: "1 1 90px",
     padding: "12px 8px",
     fontSize: 18,
-    fontWeight: 800,
+    fontWeight: 900,
     borderRadius: 12,
-    border: "3px solid #78350f",
-    background: "linear-gradient(#fcd34d, #d97706)",
-    color: "#ffffff",
+    border: "3px solid #f5b82e",
+    background: "#0b1b3a",
+    color: "#f5b82e",
     cursor: "pointer",
-    boxShadow: "0 4px 0 #78350f",
     fontFamily: "inherit",
   };
 
@@ -75,37 +79,56 @@ export const HomeScreen: React.FC<HomeProps> = ({
       className="screen home-screen"
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(#fef3c7, #fde68a)",
+        background: "linear-gradient(#9b0615, #6f0410)",
         padding: 20,
         boxSizing: "border-box",
-        fontFamily: "Arial Rounded MT Bold, Arial, sans-serif",
+        fontFamily: "Arial Rounded MT Bold, Arial Black, Arial, sans-serif",
       }}
     >
       <div style={{ maxWidth: 420, margin: "0 auto" }}>
         <div
           style={{
-            background: "linear-gradient(#166534, #14532d)",
-            border: "4px solid #facc15",
-            borderRadius: 18,
-            padding: "18px 12px",
+            background: "#0b1b3a",
+            borderTop: "5px solid #f5b82e",
+            borderBottom: "5px solid #f5b82e",
+            padding: "20px 12px",
             textAlign: "center",
-            color: "#ffffff",
-            boxShadow: "0 6px 14px rgba(0,0,0,0.3)",
-            marginBottom: 24,
+            marginBottom: 26,
+            boxShadow: "0 8px 18px rgba(0,0,0,0.4)",
           }}
         >
-          <div style={{ fontSize: 44, fontWeight: 900, color: "#facc15", letterSpacing: 2 }}>
-            COS
+          <div
+            style={{
+              fontSize: 22,
+              fontWeight: 900,
+              color: "#fb923c",
+              letterSpacing: 2,
+            }}
+          >
+            {"ALEXANDER & FRIENDS"}
           </div>
-          <div style={{ fontSize: 28, fontWeight: 900 }}>Spot the Difference</div>
+          <div
+            style={{
+              fontSize: 40,
+              fontWeight: 900,
+              color: "#f5b82e",
+              lineHeight: 1.05,
+              marginTop: 6,
+              textShadow: "3px 3px 0 #7c2d12",
+            }}
+          >
+            SPOT THE
+            <br />
+            DIFFERENCE
+          </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <button style={orange} onClick={onPlay}>Play</button>
-          <button style={purple} onClick={onDaily}>Daily Challenge</button>
-          <button style={blue} onClick={onCreate}>Create Your Own</button>
-          <button style={green} onClick={onToggleTimer}>
-            Timer Mode: {timerEnabled ? "ON" : "OFF"}
+          <button style={orange} onClick={onPlay}>PLAY</button>
+          <button style={teal} onClick={onDaily}>DAILY CHALLENGE</button>
+          <button style={gold} onClick={onCreate}>CREATE YOUR OWN</button>
+          <button style={navy} onClick={onToggleTimer}>
+            TIMER MODE: {timerEnabled ? "ON" : "OFF"}
           </button>
         </div>
 
