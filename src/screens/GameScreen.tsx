@@ -6,29 +6,70 @@ interface GameProps {
   onBack: () => void;
 }
 
-type Diff = {
-  id: number;
-  x: number;
-  y: number;
-  left: React.ReactNode;
-  right: React.ReactNode;
+type Pt = [number, number];
+type Spot = { id: number; l: Pt; r: Pt };
+type PuzzleData = { spots: Spot[] };
+
+// Coordinates are in pixels on the 1080 x 720 pictures.
+// l = where the difference is on the left side, r = where it is on the right side.
+const PUZZLES: Record<string, PuzzleData> = {
+  "puzzle-1": {
+    spots: [
+      { id: 1, l: [405, 310], r: [928, 310] },
+      { id: 2, l: [218, 455], r: [741, 455] },
+      { id: 3, l: [132, 590], r: [655, 595] },
+      { id: 4, l: [219, 637], r: [742, 637] },
+      { id: 5, l: [123, 210], r: [647, 220] },
+    ],
+  },
+  "puzzle-4": {
+    spots: [
+      { id: 1, l: [140, 280], r: [620, 320] },
+      { id: 2, l: [297, 190], r: [652, 190] },
+      { id: 3, l: [247, 288], r: [722, 288] },
+      { id: 4, l: [95, 452], r: [640, 452] },
+      { id: 5, l: [103, 525], r: [645, 500] },
+      { id: 6, l: [135, 625], r: [600, 608] },
+    ],
+  },
+  "puzzle-3": {
+    spots: [
+      { id: 1, l: [335, 488], r: [873, 488] },
+      { id: 2, l: [462, 270], r: [1010, 215] },
+      { id: 3, l: [472, 322], r: [1010, 318] },
+      { id: 4, l: [45, 430], r: [578, 420] },
+      { id: 5, l: [393, 465], r: [925, 488] },
+      { id: 6, l: [225, 690], r: [750, 688] },
+    ],
+  },
+  "puzzle-2": {
+    spots: [
+      { id: 1, l: [92, 585], r: [623, 585] },
+      { id: 2, l: [473, 180], r: [997, 170] },
+      { id: 3, l: [78, 495], r: [588, 497] },
+      { id: 4, l: [487, 440], r: [1015, 420] },
+      { id: 5, l: [475, 655], r: [868, 653] },
+      { id: 6, l: [507, 470], r: [1035, 468] },
+    ],
+  },
 };
 
-const DIFFS: Diff[] = [
-  { id: 1, x: 80, y: 15, left: <circle cx="80" cy="15" r="7" fill="#fbbf24" />, right: <circle cx="80" cy="15" r="7" fill="#f97316" /> },
-  { id: 2, x: 25, y: 15, left: <ellipse cx="25" cy="15" rx="10" ry="4" fill="#ffffff" />, right: null },
-  { id: 3, x: 50, y: 60, left: <rect x="40" y="50" width="22" height="20" fill="#ef4444" />, right: <rect x="40" y="50" width="22" height="20" fill="#3b82f6" /> },
-  { id: 4, x: 51, y: 65, left: <rect x="48" y="60" width="6" height="10" fill="#78350f" />, right: <rect x="48" y="60" width="6" height="10" fill="#fde68a" /> },
-  { id: 5, x: 45, y: 56, left: <rect x="43" y="54" width="5" height="5" fill="#bae6fd" />, right: null },
-  { id: 6, x: 15, y: 60, left: <circle cx="15" cy="60" r="10" fill="#16a34a" />, right: <circle cx="15" cy="60" r="10" fill="#84cc16" /> },
-  { id: 7, x: 60, y: 25, left: <polygon points="57,25 60,22 63,25 60,24" fill="#1f2937" />, right: null },
-  { id: 8, x: 80, y: 85, left: <circle cx="80" cy="85" r="3" fill="#ec4899" />, right: null },
-  { id: 9, x: 70, y: 62, left: <rect x="68" y="58" width="4" height="8" fill="#57534e" />, right: null },
-  { id: 10, x: 30, y: 88, left: <circle cx="30" cy="88" r="3" fill="#f43f5e" />, right: <circle cx="30" cy="88" r="3" fill="#facc15" /> },
-];
+const LEVEL_PICTURES: Record<string, string> = {
+  easy: "puzzle-1",
+  medium: "puzzle-4",
+  hard: "puzzle-2",
+};
 
-const HIT_RADIUS = 7;
-const EASY_ORDER = [3, 6, 1, 2, 10, 4, 8, 5, 9, 7];
+const ALL_PUZZLES = Object.keys(PUZZLES);
+
+const pickPuzzle = (id: string | null): string => {
+  if (id && LEVEL_PICTURES[id]) return LEVEL_PICTURES[id];
+  return ALL_PUZZLES[Math.floor(Math.random() * ALL_PUZZLES.length)];
+};
+
+const IMG_W = 1080;
+const IMG_H = 720;
+const HIT_RADIUS = 42;
 const START_SECONDS = 120;
 const START_HINTS = 3;
 
@@ -38,56 +79,11 @@ const formatTime = (s: number) => {
   return m + ":" + sec;
 };
 
-const Scene: React.FC<{
-  side: "left" | "right";
-  active: number[];
-  found: number[];
-  hintId: number | null;
-  miss: { x: number; y: number } | null;
-  onTap: (x: number, y: number) => void;
-}> = ({ side, active, found, hintId, miss, onTap }) => (
-  <svg
-    viewBox="0 0 100 100"
-    style={{
-      width: "100%",
-      aspectRatio: "1 / 1",
-      borderRadius: 14,
-      border: "5px solid #92400e",
-      boxShadow: "0 6px 14px rgba(0,0,0,0.3)",
-      cursor: "pointer",
-      touchAction: "manipulation",
-      display: "block",
-    }}
-    onClick={(e) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      onTap(
-        ((e.clientX - rect.left) / rect.width) * 100,
-        ((e.clientY - rect.top) / rect.height) * 100
-      );
-    }}
-  >
-    <rect x="0" y="0" width="100" height="100" fill="#bfdbfe" />
-    <circle cx="10" cy="10" r="6" fill="#fde047" />
-    <rect x="0" y="72" width="100" height="28" fill="#86efac" />
-    <polygon points="38,50 51,38 64,50" fill="#7c2d12" />
-    {DIFFS.map((d) => (
-      <g key={d.id}>{side === "left" || !active.includes(d.id) ? d.left : d.right}</g>
-    ))}
-    {DIFFS.filter((d) => found.includes(d.id)).map((d) => (
-      <circle key={"f" + d.id} cx={d.x} cy={d.y} r={HIT_RADIUS} fill="rgba(34,197,94,0.25)" stroke="#16a34a" strokeWidth="1.8" />
-    ))}
-    {DIFFS.filter((d) => d.id === hintId).map((d) => (
-      <circle key={"h" + d.id} cx={d.x} cy={d.y} r={HIT_RADIUS + 2} fill="none" stroke="#facc15" strokeWidth="2" strokeDasharray="3 2" />
-    ))}
-    {miss && (
-      <text x={miss.x} y={miss.y} fontSize="9" fontWeight="bold" fill="#dc2626" textAnchor="middle">
-        X
-      </text>
-    )}
-  </svg>
-);
-
 export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }) => {
+  const [key] = useState(() => pickPuzzle(puzzle.id));
+  const spots = PUZZLES[key].spots;
+  const imageFile = key + ".jpg";
+
   const [found, setFound] = useState<number[]>([]);
   const [misses, setMisses] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(START_SECONDS);
@@ -95,11 +91,9 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
   const [hintId, setHintId] = useState<number | null>(null);
   const [miss, setMiss] = useState<{ x: number; y: number } | null>(null);
   const [paused, setPaused] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
-  const count = Math.min(Math.max(puzzle.totalDifferences || 10, 1), DIFFS.length);
-  const activeIds = EASY_ORDER.slice(0, count);
-  const activeDiffs = DIFFS.filter((d) => activeIds.includes(d.id));
-  const total = activeDiffs.length;
+  const total = spots.length;
   const won = found.length === total;
   const lost = timerEnabled && secondsLeft <= 0 && !won;
   const finished = won || lost;
@@ -112,13 +106,29 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
     return () => clearInterval(t);
   }, [timerEnabled, finished, paused]);
 
-  const handleTap = (x: number, y: number) => {
+  const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
     if (finished || paused) return;
-    const hit = activeDiffs.find(
-      (d) => !found.includes(d.id) && Math.hypot(d.x - x, d.y - y) <= HIT_RADIUS
-    );
-    if (hit) {
-      setFound((f) => [...f, hit.id]);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * IMG_W;
+    const y = ((e.clientY - rect.top) / rect.height) * IMG_H;
+
+    let best: Spot | null = null;
+    let bestDist = HIT_RADIUS + 1;
+    for (const s of spots) {
+      if (found.includes(s.id)) continue;
+      const d = Math.min(
+        Math.hypot(s.l[0] - x, s.l[1] - y),
+        Math.hypot(s.r[0] - x, s.r[1] - y)
+      );
+      if (d <= HIT_RADIUS && d < bestDist) {
+        best = s;
+        bestDist = d;
+      }
+    }
+
+    if (best) {
+      const id = best.id;
+      setFound((f) => [...f, id]);
       setHintId(null);
     } else {
       setMisses((m) => m + 1);
@@ -130,7 +140,7 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
 
   const useHint = () => {
     if (finished || paused || hintsLeft <= 0) return;
-    const remaining = activeDiffs.filter((d) => !found.includes(d.id));
+    const remaining = spots.filter((s) => !found.includes(s.id));
     if (remaining.length === 0) return;
     const pick = remaining[Math.floor(Math.random() * remaining.length)];
     setHintId(pick.id);
@@ -233,14 +243,104 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
         </div>
 
         <div style={{ position: "relative" }}>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 300px" }}>
-              <Scene side="left" active={activeIds} found={found} hintId={hintId} miss={miss} onTap={handleTap} />
+          {imgError ? (
+            <div
+              style={{
+                padding: 30,
+                borderRadius: 14,
+                background: "#fee2e2",
+                border: "4px solid #dc2626",
+                textAlign: "center",
+                fontSize: 20,
+                fontWeight: 800,
+                color: "#7f1d1d",
+              }}
+            >
+              Picture not found: {imageFile}
+              <div style={{ fontSize: 15, marginTop: 8, fontWeight: 600 }}>
+                Check that this file is in the public folder of your repo.
+              </div>
             </div>
-            <div style={{ flex: "1 1 300px" }}>
-              <Scene side="right" active={activeIds} found={found} hintId={hintId} miss={miss} onTap={handleTap} />
+          ) : (
+            <div
+              onClick={handleTap}
+              style={{
+                position: "relative",
+                cursor: "pointer",
+                touchAction: "manipulation",
+                borderRadius: 14,
+                overflow: "hidden",
+                border: "5px solid #92400e",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.3)",
+                lineHeight: 0,
+              }}
+            >
+              <img
+                src={imageFile}
+                alt="Spot the difference puzzle"
+                onError={() => setImgError(true)}
+                draggable={false}
+                style={{ width: "100%", display: "block", userSelect: "none" }}
+              />
+              <svg
+                viewBox={"0 0 " + IMG_W + " " + IMG_H}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  pointerEvents: "none",
+                }}
+              >
+                {spots
+                  .filter((s) => found.includes(s.id))
+                  .map((s) =>
+                    [s.l, s.r].map((p, i) => (
+                      <circle
+                        key={"f" + s.id + "-" + i}
+                        cx={p[0]}
+                        cy={p[1]}
+                        r={HIT_RADIUS}
+                        fill="rgba(34,197,94,0.25)"
+                        stroke="#16a34a"
+                        strokeWidth="6"
+                      />
+                    ))
+                  )}
+                {spots
+                  .filter((s) => s.id === hintId)
+                  .map((s) =>
+                    [s.l, s.r].map((p, i) => (
+                      <circle
+                        key={"h" + s.id + "-" + i}
+                        cx={p[0]}
+                        cy={p[1]}
+                        r={HIT_RADIUS + 8}
+                        fill="none"
+                        stroke="#facc15"
+                        strokeWidth="6"
+                        strokeDasharray="14 8"
+                      />
+                    ))
+                  )}
+                {miss && (
+                  <text
+                    x={miss.x}
+                    y={miss.y + 14}
+                    fontSize="44"
+                    fontWeight="bold"
+                    fill="#dc2626"
+                    stroke="#ffffff"
+                    strokeWidth="2"
+                    textAnchor="middle"
+                  >
+                    X
+                  </text>
+                )}
+              </svg>
             </div>
-          </div>
+          )}
 
           {paused && !finished && (
             <div
