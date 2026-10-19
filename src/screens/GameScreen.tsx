@@ -28,6 +28,7 @@ const DIFFS: Diff[] = [
 ];
 
 const HIT_RADIUS = 7;
+const EASY_ORDER = [3, 6, 1, 2, 10, 4, 8, 5, 9, 7];
 const START_SECONDS = 120;
 const START_HINTS = 3;
 
@@ -39,11 +40,12 @@ const formatTime = (s: number) => {
 
 const Scene: React.FC<{
   side: "left" | "right";
+  active: number[];
   found: number[];
   hintId: number | null;
   miss: { x: number; y: number } | null;
   onTap: (x: number, y: number) => void;
-}> = ({ side, found, hintId, miss, onTap }) => (
+}> = ({ side, active, found, hintId, miss, onTap }) => (
   <svg
     viewBox="0 0 100 100"
     style={{
@@ -69,7 +71,7 @@ const Scene: React.FC<{
     <rect x="0" y="72" width="100" height="28" fill="#86efac" />
     <polygon points="38,50 51,38 64,50" fill="#7c2d12" />
     {DIFFS.map((d) => (
-      <g key={d.id}>{side === "left" ? d.left : d.right}</g>
+      <g key={d.id}>{side === "left" || !active.includes(d.id) ? d.left : d.right}</g>
     ))}
     {DIFFS.filter((d) => found.includes(d.id)).map((d) => (
       <circle key={"f" + d.id} cx={d.x} cy={d.y} r={HIT_RADIUS} fill="rgba(34,197,94,0.25)" stroke="#16a34a" strokeWidth="1.8" />
@@ -94,7 +96,10 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
   const [miss, setMiss] = useState<{ x: number; y: number } | null>(null);
   const [paused, setPaused] = useState(false);
 
-  const total = DIFFS.length;
+  const count = Math.min(Math.max(puzzle.totalDifferences || 10, 1), DIFFS.length);
+  const activeIds = EASY_ORDER.slice(0, count);
+  const activeDiffs = DIFFS.filter((d) => activeIds.includes(d.id));
+  const total = activeDiffs.length;
   const won = found.length === total;
   const lost = timerEnabled && secondsLeft <= 0 && !won;
   const finished = won || lost;
@@ -109,7 +114,7 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
 
   const handleTap = (x: number, y: number) => {
     if (finished || paused) return;
-    const hit = DIFFS.find(
+    const hit = activeDiffs.find(
       (d) => !found.includes(d.id) && Math.hypot(d.x - x, d.y - y) <= HIT_RADIUS
     );
     if (hit) {
@@ -125,7 +130,7 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
 
   const useHint = () => {
     if (finished || paused || hintsLeft <= 0) return;
-    const remaining = DIFFS.filter((d) => !found.includes(d.id));
+    const remaining = activeDiffs.filter((d) => !found.includes(d.id));
     if (remaining.length === 0) return;
     const pick = remaining[Math.floor(Math.random() * remaining.length)];
     setHintId(pick.id);
@@ -230,10 +235,10 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
         <div style={{ position: "relative" }}>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 300px" }}>
-              <Scene side="left" found={found} hintId={hintId} miss={miss} onTap={handleTap} />
+              <Scene side="left" active={activeIds} found={found} hintId={hintId} miss={miss} onTap={handleTap} />
             </div>
             <div style={{ flex: "1 1 300px" }}>
-              <Scene side="right" found={found} hintId={hintId} miss={miss} onTap={handleTap} />
+              <Scene side="right" active={activeIds} found={found} hintId={hintId} miss={miss} onTap={handleTap} />
             </div>
           </div>
 
