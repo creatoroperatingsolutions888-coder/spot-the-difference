@@ -57,7 +57,7 @@ const PUZZLES: Record<string, PuzzleData> = {
 const LEVEL_PICTURES: Record<string, string> = {
   easy: "puzzle-1",
   medium: "puzzle-4",
-  hard: "puzzle-2",
+  hard: "puzzle-3",
 };
 
 const ALL_PUZZLES = Object.keys(PUZZLES);
