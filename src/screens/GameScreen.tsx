@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getCustomPuzzle } from "./CreatePuzzleScreen";
+import { recordWin } from "../stats";
 
 interface GameProps {
   puzzle: { id: string | null; totalDifferences: number };
@@ -9,15 +10,26 @@ interface GameProps {
 
 type Pt = [number, number];
 type Spot = { id: number; l: Pt; r: Pt };
-type PuzzleData = { image: string; w: number; h: number; spots: Spot[]; bonus: Spot[] };
+type Crop = [number, number, number, number]; // x, y, width, height
+type PuzzleData = {
+  image: string;
+  natW: number;
+  natH: number;
+  crop: Crop;
+  spots: Spot[];
+  bonus: Spot[];
+};
 
 // Set this to true only if YouTube approved the logo, or you accept the risk.
 const USE_YOUTUBE_PICTURE = false;
 
-// Coordinates are pixels on the 1080 x 720 pictures.
-// "spots" are the differences you must find. "bonus" are extra ones worth bonus points.
-const BUILT_IN: Record<string, { spots: Spot[]; bonus: Spot[] }> = {
+// Coordinates are pixels on the original 1080 x 720 pictures.
+// "spots" are the differences you must find to win.
+// "bonus" are extra differences that give bonus points.
+// "crop" is the part of the picture to show (this hides the title banner).
+const BUILT_IN: Record<string, { crop: Crop; spots: Spot[]; bonus: Spot[] }> = {
   "puzzle-1": {
+    crop: [25, 132, 1030, 560],
     spots: [
       { id: 1, l: [405, 310], r: [928, 310] },
       { id: 2, l: [218, 455], r: [741, 455] },
@@ -25,12 +37,10 @@ const BUILT_IN: Record<string, { spots: Spot[]; bonus: Spot[] }> = {
       { id: 4, l: [219, 637], r: [742, 637] },
       { id: 5, l: [123, 210], r: [647, 220] },
     ],
-    bonus: [
-      { id: 1, l: [316, 533], r: [845, 537] },
-      { id: 2, l: [100, 520], r: [625, 518] },
-    ],
+    bonus: [{ id: 1, l: [452, 605], r: [978, 603] }],
   },
   "puzzle-4": {
+    crop: [15, 113, 1045, 555],
     spots: [
       { id: 1, l: [140, 280], r: [620, 320] },
       { id: 2, l: [297, 190], r: [652, 190] },
@@ -39,9 +49,13 @@ const BUILT_IN: Record<string, { spots: Spot[]; bonus: Spot[] }> = {
       { id: 5, l: [103, 525], r: [645, 500] },
       { id: 6, l: [135, 625], r: [600, 608] },
     ],
-    bonus: [{ id: 1, l: [482, 635], r: [917, 585] }],
+    bonus: [
+      { id: 1, l: [410, 248], r: [905, 250] },
+      { id: 2, l: [482, 635], r: [917, 585] },
+    ],
   },
   "puzzle-3": {
+    crop: [0, 176, 1080, 544],
     spots: [
       { id: 1, l: [335, 488], r: [873, 488] },
       { id: 2, l: [462, 270], r: [1010, 215] },
@@ -52,21 +66,25 @@ const BUILT_IN: Record<string, { spots: Spot[]; bonus: Spot[] }> = {
     ],
     bonus: [
       { id: 1, l: [480, 397], r: [1012, 410] },
-      { id: 2, l: [55, 240], r: [595, 235] },
+      { id: 2, l: [52, 562], r: [585, 546] },
     ],
   },
   "puzzle-2": {
+    crop: [15, 115, 1050, 580],
     spots: [
       { id: 1, l: [92, 585], r: [623, 585] },
       { id: 2, l: [473, 180], r: [997, 170] },
       { id: 3, l: [78, 495], r: [588, 497] },
       { id: 4, l: [487, 440], r: [1015, 420] },
-      { id: 5, l: [475, 655], r: [868, 653] },
-      { id: 6, l: [507, 470], r: [1035, 468] },
+      { id: 5, l: [287, 650], r: [866, 653] },
+      { id: 6, l: [485, 472], r: [1011, 472] },
     ],
     bonus: [
-      { id: 1, l: [397, 172], r: [938, 192] },
-      { id: 2, l: [205, 215], r: [735, 213] },
+      { id: 1, l: [393, 170], r: [938, 195] },
+      { id: 2, l: [391, 212], r: [1000, 222] },
+      { id: 3, l: [54, 237], r: [585, 240] },
+      { id: 4, l: [366, 509], r: [894, 509] },
+      { id: 5, l: [319, 609], r: [812, 614] },
     ],
   },
 };
@@ -81,21 +99,41 @@ const RANDOM_POOL: string[] = USE_YOUTUBE_PICTURE
   ? ["puzzle-1", "puzzle-4", "puzzle-3", "puzzle-2"]
   : ["puzzle-1", "puzzle-4", "puzzle-3"];
 
+const isDailyId = (id: string | null): boolean =>
+  !!id && id.toLowerCase().indexOf("daily") >= 0;
+
+// Same number for everyone on the same calendar day.
+const dayNumber = (): number => {
+  const d = new Date();
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+};
+
 const pickBuiltIn = (id: string | null): string => {
   if (id && LEVEL_PICTURES[id]) return LEVEL_PICTURES[id];
+  if (isDailyId(id)) return RANDOM_POOL[dayNumber() % RANDOM_POOL.length];
   return RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)];
 };
 
 const resolvePuzzle = (id: string | null): PuzzleData => {
   if (id === "custom") {
     const c = getCustomPuzzle();
-    if (c) return { image: c.image, w: c.width, h: c.height, spots: c.spots, bonus: [] };
+    if (c) {
+      return {
+        image: c.image,
+        natW: c.width,
+        natH: c.height,
+        crop: [0, 0, c.width, c.height],
+        spots: c.spots,
+        bonus: [],
+      };
+    }
   }
   const key = pickBuiltIn(id);
   return {
     image: key + ".jpg",
-    w: 1080,
-    h: 720,
+    natW: 1080,
+    natH: 720,
+    crop: BUILT_IN[key].crop,
     spots: BUILT_IN[key].spots,
     bonus: BUILT_IN[key].bonus,
   };
@@ -117,23 +155,27 @@ const formatTime = (s: number) => {
 
 export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }) => {
   const [data] = useState<PuzzleData>(() => resolvePuzzle(puzzle.id));
-  const { spots, bonus, image, w, h } = data;
+  const { spots, bonus, image, crop, natW, natH } = data;
+  const isDaily = isDailyId(puzzle.id);
 
   const [found, setFound] = useState<number[]>([]);
   const [bonusFound, setBonusFound] = useState<number[]>([]);
   const [misses, setMisses] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(START_SECONDS);
+  const [elapsed, setElapsed] = useState(0);
   const [hintsLeft, setHintsLeft] = useState(START_HINTS);
   const [hintId, setHintId] = useState<number | null>(null);
   const [miss, setMiss] = useState<{ x: number; y: number } | null>(null);
   const [flash, setFlash] = useState<{ x: number; y: number } | null>(null);
   const [paused, setPaused] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const recordedRef = useRef(false);
 
   const total = spots.length;
   const won = found.length === total;
   const lost = timerEnabled && secondsLeft <= 0 && !won;
   const finished = won || lost;
+  const stars = misses <= 2 ? 3 : misses <= 6 ? 2 : 1;
   const points = Math.max(
     0,
     found.length * POINTS_FIND + bonusFound.length * POINTS_BONUS - misses * POINTS_MISS
@@ -146,6 +188,23 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
     }, 1000);
     return () => clearInterval(t);
   }, [timerEnabled, finished, paused]);
+
+  // counts the real time spent, for Best Time (works in Chill Mode too)
+  useEffect(() => {
+    if (finished || paused) return;
+    const t = setInterval(() => {
+      setElapsed((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [finished, paused]);
+
+  // save the win to My Stats, once
+  useEffect(() => {
+    if (won && !recordedRef.current) {
+      recordedRef.current = true;
+      recordWin({ seconds: elapsed, stars, daily: isDaily });
+    }
+  }, [won, elapsed, stars, isDaily]);
 
   const distTo = (s: Spot, x: number, y: number) =>
     Math.min(Math.hypot(s.l[0] - x, s.l[1] - y), Math.hypot(s.r[0] - x, s.r[1] - y));
@@ -167,8 +226,8 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
   const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
     if (finished || paused) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * w;
-    const y = ((e.clientY - rect.top) / rect.height) * h;
+    const x = crop[0] + ((e.clientX - rect.left) / rect.width) * crop[2];
+    const y = crop[1] + ((e.clientY - rect.top) / rect.height) * crop[3];
 
     const hit = nearest(spots, found, x, y);
     if (hit) {
@@ -183,7 +242,7 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
       const id = extra.id;
       setBonusFound((b) => [...b, id]);
       setFlash({ x, y });
-      setTimeout(() => setFlash(null), 900);
+      setTimeout(() => setFlash(null), 1200);
       return;
     }
 
@@ -214,12 +273,12 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
     setBonusFound([]);
     setMisses(0);
     setSecondsLeft(START_SECONDS);
+    setElapsed(0);
     setHintsLeft(START_HINTS);
     setHintId(null);
     setPaused(false);
+    recordedRef.current = false;
   };
-
-  const stars = misses <= 2 ? 3 : misses <= 6 ? 2 : 1;
 
   const orange: React.CSSProperties = {
     padding: "12px 20px",
@@ -339,11 +398,7 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
             </div>
           ) : (
             <div
-              onClick={handleTap}
               style={{
-                position: "relative",
-                cursor: "pointer",
-                touchAction: "manipulation",
                 borderRadius: 14,
                 overflow: "hidden",
                 border: "5px solid #92400e",
@@ -351,99 +406,119 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
                 lineHeight: 0,
               }}
             >
-              <img
-                src={image}
-                alt="Spot the difference puzzle"
-                onError={() => setImgError(true)}
-                draggable={false}
-                style={{ width: "100%", display: "block", userSelect: "none" }}
-              />
-              <svg
-                viewBox={"0 0 " + w + " " + h}
+              <div
+                onClick={handleTap}
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
+                  position: "relative",
                   width: "100%",
-                  height: "100%",
-                  pointerEvents: "none",
+                  aspectRatio: crop[2] + " / " + crop[3],
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  touchAction: "manipulation",
                 }}
               >
-                {spots
-                  .filter((s) => found.includes(s.id))
-                  .map((s) =>
-                    [s.l, s.r].map((p, i) => (
-                      <circle
-                        key={"f" + s.id + "-" + i}
-                        cx={p[0]}
-                        cy={p[1]}
-                        r={RING_R}
-                        fill="rgba(34,197,94,0.25)"
-                        stroke="#16a34a"
-                        strokeWidth="6"
-                      />
-                    ))
+                <img
+                  src={image}
+                  alt="Spot the difference puzzle"
+                  onError={() => setImgError(true)}
+                  draggable={false}
+                  style={{
+                    position: "absolute",
+                    left: -(crop[0] / crop[2]) * 100 + "%",
+                    top: -(crop[1] / crop[3]) * 100 + "%",
+                    width: (natW / crop[2]) * 100 + "%",
+                    height: (natH / crop[3]) * 100 + "%",
+                    maxWidth: "none",
+                    userSelect: "none",
+                  }}
+                />
+                <svg
+                  viewBox={crop[0] + " " + crop[1] + " " + crop[2] + " " + crop[3]}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {spots
+                    .filter((s) => found.includes(s.id))
+                    .map((s) =>
+                      [s.l, s.r].map((p, i) => (
+                        <circle
+                          key={"f" + s.id + "-" + i}
+                          cx={p[0]}
+                          cy={p[1]}
+                          r={RING_R}
+                          fill="rgba(34,197,94,0.25)"
+                          stroke="#16a34a"
+                          strokeWidth="6"
+                        />
+                      ))
+                    )}
+                  {bonus
+                    .filter((s) => bonusFound.includes(s.id))
+                    .map((s) =>
+                      [s.l, s.r].map((p, i) => (
+                        <circle
+                          key={"b" + s.id + "-" + i}
+                          cx={p[0]}
+                          cy={p[1]}
+                          r={RING_R}
+                          fill="rgba(250,204,21,0.3)"
+                          stroke="#eab308"
+                          strokeWidth="6"
+                        />
+                      ))
+                    )}
+                  {spots
+                    .filter((s) => s.id === hintId)
+                    .map((s) =>
+                      [s.l, s.r].map((p, i) => (
+                        <circle
+                          key={"h" + s.id + "-" + i}
+                          cx={p[0]}
+                          cy={p[1]}
+                          r={RING_R + 8}
+                          fill="none"
+                          stroke="#facc15"
+                          strokeWidth="6"
+                          strokeDasharray="14 8"
+                        />
+                      ))
+                    )}
+                  {miss && (
+                    <text
+                      x={miss.x}
+                      y={miss.y + 14}
+                      fontSize="44"
+                      fontWeight="bold"
+                      fill="#dc2626"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      textAnchor="middle"
+                    >
+                      X
+                    </text>
                   )}
-                {bonus
-                  .filter((s) => bonusFound.includes(s.id))
-                  .map((s) =>
-                    [s.l, s.r].map((p, i) => (
-                      <circle
-                        key={"b" + s.id + "-" + i}
-                        cx={p[0]}
-                        cy={p[1]}
-                        r={RING_R}
-                        fill="rgba(250,204,21,0.3)"
-                        stroke="#eab308"
-                        strokeWidth="6"
-                      />
-                    ))
+                  {flash && (
+                    <text
+                      x={flash.x}
+                      y={flash.y - 20}
+                      fontSize="44"
+                      fontWeight="bold"
+                      fill="#ca8a04"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      textAnchor="middle"
+                    >
+                      {"+" + POINTS_BONUS + " Bonus!"}
+                    </text>
                   )}
-                {spots
-                  .filter((s) => s.id === hintId)
-                  .map((s) =>
-                    [s.l, s.r].map((p, i) => (
-                      <circle
-                        key={"h" + s.id + "-" + i}
-                        cx={p[0]}
-                        cy={p[1]}
-                        r={RING_R + 8}
-                        fill="none"
-                        stroke="#facc15"
-                        strokeWidth="6"
-                        strokeDasharray="14 8"
-                      />
-                    ))
-                  )}
-                {miss && (
-                  <text
-                    x={miss.x}
-                    y={miss.y + 14}
-                    fontSize="44"
-                    fontWeight="bold"
-                    fill="#dc2626"
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    textAnchor="middle"
-                  >
-                    X
-                  </text>
-                )}
-                {flash && (
-                  <text
-                    x={flash.x}
-                    y={flash.y - 20}
-                    fontSize="44"
-                    fontWeight="bold"
-                    fill="#ca8a04"
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    textAnchor="middle"
-                  >
-                    {"+" + POINTS_BONUS + " Bonus!"}
-                  </text>
-                )}
-              </svg>
+                </svg>
+              </div>
             </div>
           )}
 
