@@ -1,29 +1,25 @@
 import React from "react";
+import { loadStats, currentStreak } from "../stats";
 
 interface StatsProps {
   onBack: () => void;
 }
 
-export const StatsScreen: React.FC<StatsProps> = ({ onBack }) => {
-  const stats = [
-    { label: "Puzzles Solved", value: "0" },
-    { label: "Best Time", value: "--:--" },
-    { label: "Daily Streak", value: "0" },
-    { label: "Stars Earned", value: "0" },
-  ];
+const formatTime = (s: number | null): string => {
+  if (s === null) return "--:--";
+  const m = Math.floor(s / 60).toString().padStart(2, "0");
+  const sec = (s % 60).toString().padStart(2, "0");
+  return m + ":" + sec;
+};
 
-  const gold: React.CSSProperties = {
-    padding: "12px 28px",
-    fontSize: 18,
-    fontWeight: 800,
-    borderRadius: 12,
-    border: "3px solid #78350f",
-    background: "linear-gradient(#fcd34d, #d97706)",
-    color: "#ffffff",
-    cursor: "pointer",
-    boxShadow: "0 4px 0 #78350f",
-    fontFamily: "inherit",
-  };
+export const StatsScreen: React.FC<StatsProps> = ({ onBack }) => {
+  const stats = loadStats();
+  const rows: [string, string][] = [
+    ["Puzzles Solved", String(stats.solved)],
+    ["Best Time", formatTime(stats.bestSeconds)],
+    ["Daily Streak", String(currentStreak(stats))],
+    ["Stars Earned", String(stats.stars)],
+  ];
 
   return (
     <div
@@ -42,10 +38,10 @@ export const StatsScreen: React.FC<StatsProps> = ({ onBack }) => {
             background: "linear-gradient(#f97316, #c2410c)",
             color: "#ffffff",
             textAlign: "center",
-            fontSize: 26,
+            fontSize: 30,
             fontWeight: 900,
-            padding: "10px 16px",
-            borderRadius: 12,
+            padding: "12px 16px",
+            borderRadius: 14,
             border: "3px solid #7c2d12",
             boxShadow: "0 4px 0 #7c2d12",
             marginBottom: 20,
@@ -56,46 +52,63 @@ export const StatsScreen: React.FC<StatsProps> = ({ onBack }) => {
 
         <div
           style={{
-            background: "#78350f",
-            borderRadius: 16,
-            padding: 14,
+            background: "#7c2d12",
             border: "4px solid #451a03",
+            borderRadius: 18,
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
           }}
         >
-          {stats.map((s) => (
+          {rows.map((row) => (
             <div
-              key={s.label}
+              key={row[0]}
               style={{
+                background: "#92400e",
+                borderRadius: 12,
+                padding: "14px 16px",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                background: "#92400e",
-                color: "#ffffff",
-                padding: "14px 16px",
-                borderRadius: 12,
-                marginBottom: 10,
-                fontSize: 20,
-                fontWeight: 800,
+                gap: 10,
               }}
             >
-              <span>{s.label}</span>
-              <span
+              <div style={{ color: "#ffffff", fontSize: 22, fontWeight: 800 }}>{row[0]}</div>
+              <div
                 style={{
                   background: "#16a34a",
-                  padding: "6px 16px",
+                  color: "#ffffff",
+                  fontSize: 22,
+                  fontWeight: 800,
                   borderRadius: 10,
-                  minWidth: 60,
+                  padding: "6px 18px",
+                  minWidth: 70,
                   textAlign: "center",
                 }}
               >
-                {s.value}
-              </span>
+                {row[1]}
+              </div>
             </div>
           ))}
         </div>
 
-        <div style={{ marginTop: 24, textAlign: "center" }}>
-          <button style={gold} onClick={onBack}>
+        <div style={{ marginTop: 26, textAlign: "center" }}>
+          <button
+            style={{
+              padding: "12px 28px",
+              fontSize: 18,
+              fontWeight: 800,
+              borderRadius: 12,
+              border: "3px solid #78350f",
+              background: "linear-gradient(#fcd34d, #d97706)",
+              color: "#ffffff",
+              cursor: "pointer",
+              boxShadow: "0 4px 0 #78350f",
+              fontFamily: "inherit",
+            }}
+            onClick={onBack}
+          >
             Back
           </button>
         </div>
