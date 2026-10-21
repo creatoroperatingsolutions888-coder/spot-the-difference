@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { getCustomPuzzle } from "./CreatePuzzleScreen";
 
 interface GameProps {
   puzzle: { id: string | null; totalDifferences: number };
@@ -8,11 +9,14 @@ interface GameProps {
 
 type Pt = [number, number];
 type Spot = { id: number; l: Pt; r: Pt };
-type PuzzleData = { spots: Spot[] };
+type PuzzleData = { image: string; w: number; h: number; spots: Spot[]; bonus: Spot[] };
 
-// Coordinates are in pixels on the 1080 x 720 pictures.
-// l = where the difference is on the left side, r = where it is on the right side.
-const PUZZLES: Record<string, PuzzleData> = {
+// Set this to true only if YouTube approved the logo, or you accept the risk.
+const USE_YOUTUBE_PICTURE = false;
+
+// Coordinates are pixels on the 1080 x 720 pictures.
+// "spots" are the differences you must find. "bonus" are extra ones worth bonus points.
+const BUILT_IN: Record<string, { spots: Spot[]; bonus: Spot[] }> = {
   "puzzle-1": {
     spots: [
       { id: 1, l: [405, 310], r: [928, 310] },
@@ -20,6 +24,10 @@ const PUZZLES: Record<string, PuzzleData> = {
       { id: 3, l: [132, 590], r: [655, 595] },
       { id: 4, l: [219, 637], r: [742, 637] },
       { id: 5, l: [123, 210], r: [647, 220] },
+    ],
+    bonus: [
+      { id: 1, l: [316, 533], r: [845, 537] },
+      { id: 2, l: [100, 520], r: [625, 518] },
     ],
   },
   "puzzle-4": {
@@ -31,6 +39,7 @@ const PUZZLES: Record<string, PuzzleData> = {
       { id: 5, l: [103, 525], r: [645, 500] },
       { id: 6, l: [135, 625], r: [600, 608] },
     ],
+    bonus: [{ id: 1, l: [482, 635], r: [917, 585] }],
   },
   "puzzle-3": {
     spots: [
@@ -40,6 +49,10 @@ const PUZZLES: Record<string, PuzzleData> = {
       { id: 4, l: [45, 430], r: [578, 420] },
       { id: 5, l: [393, 465], r: [925, 488] },
       { id: 6, l: [225, 690], r: [750, 688] },
+    ],
+    bonus: [
+      { id: 1, l: [480, 397], r: [1012, 410] },
+      { id: 2, l: [55, 240], r: [595, 235] },
     ],
   },
   "puzzle-2": {
@@ -51,27 +64,50 @@ const PUZZLES: Record<string, PuzzleData> = {
       { id: 5, l: [475, 655], r: [868, 653] },
       { id: 6, l: [507, 470], r: [1035, 468] },
     ],
+    bonus: [
+      { id: 1, l: [397, 172], r: [938, 192] },
+      { id: 2, l: [205, 215], r: [735, 213] },
+    ],
   },
 };
 
 const LEVEL_PICTURES: Record<string, string> = {
   easy: "puzzle-1",
   medium: "puzzle-4",
-  hard: "puzzle-3",
+  hard: USE_YOUTUBE_PICTURE ? "puzzle-2" : "puzzle-3",
 };
 
-const ALL_PUZZLES = Object.keys(PUZZLES);
+const RANDOM_POOL: string[] = USE_YOUTUBE_PICTURE
+  ? ["puzzle-1", "puzzle-4", "puzzle-3", "puzzle-2"]
+  : ["puzzle-1", "puzzle-4", "puzzle-3"];
 
-const pickPuzzle = (id: string | null): string => {
+const pickBuiltIn = (id: string | null): string => {
   if (id && LEVEL_PICTURES[id]) return LEVEL_PICTURES[id];
-  return ALL_PUZZLES[Math.floor(Math.random() * ALL_PUZZLES.length)];
+  return RANDOM_POOL[Math.floor(Math.random() * RANDOM_POOL.length)];
 };
 
-const IMG_W = 1080;
-const IMG_H = 720;
-const HIT_RADIUS = 42;
+const resolvePuzzle = (id: string | null): PuzzleData => {
+  if (id === "custom") {
+    const c = getCustomPuzzle();
+    if (c) return { image: c.image, w: c.width, h: c.height, spots: c.spots, bonus: [] };
+  }
+  const key = pickBuiltIn(id);
+  return {
+    image: key + ".jpg",
+    w: 1080,
+    h: 720,
+    spots: BUILT_IN[key].spots,
+    bonus: BUILT_IN[key].bonus,
+  };
+};
+
+const HIT_RADIUS = 50;
+const RING_R = 42;
 const START_SECONDS = 120;
 const START_HINTS = 3;
+const POINTS_FIND = 100;
+const POINTS_BONUS = 50;
+const POINTS_MISS = 10;
 
 const formatTime = (s: number) => {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
@@ -80,16 +116,17 @@ const formatTime = (s: number) => {
 };
 
 export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }) => {
-  const [key] = useState(() => pickPuzzle(puzzle.id));
-  const spots = PUZZLES[key].spots;
-  const imageFile = key + ".jpg";
+  const [data] = useState<PuzzleData>(() => resolvePuzzle(puzzle.id));
+  const { spots, bonus, image, w, h } = data;
 
   const [found, setFound] = useState<number[]>([]);
+  const [bonusFound, setBonusFound] = useState<number[]>([]);
   const [misses, setMisses] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(START_SECONDS);
   const [hintsLeft, setHintsLeft] = useState(START_HINTS);
   const [hintId, setHintId] = useState<number | null>(null);
   const [miss, setMiss] = useState<{ x: number; y: number } | null>(null);
+  const [flash, setFlash] = useState<{ x: number; y: number } | null>(null);
   const [paused, setPaused] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -97,6 +134,10 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
   const won = found.length === total;
   const lost = timerEnabled && secondsLeft <= 0 && !won;
   const finished = won || lost;
+  const points = Math.max(
+    0,
+    found.length * POINTS_FIND + bonusFound.length * POINTS_BONUS - misses * POINTS_MISS
+  );
 
   useEffect(() => {
     if (!timerEnabled || finished || paused) return;
@@ -106,36 +147,56 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
     return () => clearInterval(t);
   }, [timerEnabled, finished, paused]);
 
-  const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (finished || paused) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * IMG_W;
-    const y = ((e.clientY - rect.top) / rect.height) * IMG_H;
+  const distTo = (s: Spot, x: number, y: number) =>
+    Math.min(Math.hypot(s.l[0] - x, s.l[1] - y), Math.hypot(s.r[0] - x, s.r[1] - y));
 
+  const nearest = (list: Spot[], skip: number[], x: number, y: number): Spot | null => {
     let best: Spot | null = null;
     let bestDist = HIT_RADIUS + 1;
-    for (const s of spots) {
-      if (found.includes(s.id)) continue;
-      const d = Math.min(
-        Math.hypot(s.l[0] - x, s.l[1] - y),
-        Math.hypot(s.r[0] - x, s.r[1] - y)
-      );
+    for (const s of list) {
+      if (skip.includes(s.id)) continue;
+      const d = distTo(s, x, y);
       if (d <= HIT_RADIUS && d < bestDist) {
         best = s;
         bestDist = d;
       }
     }
+    return best;
+  };
 
-    if (best) {
-      const id = best.id;
+  const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (finished || paused) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * w;
+    const y = ((e.clientY - rect.top) / rect.height) * h;
+
+    const hit = nearest(spots, found, x, y);
+    if (hit) {
+      const id = hit.id;
       setFound((f) => [...f, id]);
       setHintId(null);
-    } else {
-      setMisses((m) => m + 1);
-      setMiss({ x, y });
-      setTimeout(() => setMiss(null), 600);
-      if (timerEnabled) setSecondsLeft((s) => Math.max(0, s - 3));
+      return;
     }
+
+    const extra = nearest(bonus, bonusFound, x, y);
+    if (extra) {
+      const id = extra.id;
+      setBonusFound((b) => [...b, id]);
+      setFlash({ x, y });
+      setTimeout(() => setFlash(null), 900);
+      return;
+    }
+
+    // tapping something already found is not a miss
+    const alreadyFound =
+      spots.some((s) => found.includes(s.id) && distTo(s, x, y) <= HIT_RADIUS) ||
+      bonus.some((s) => bonusFound.includes(s.id) && distTo(s, x, y) <= HIT_RADIUS);
+    if (alreadyFound) return;
+
+    setMisses((m) => m + 1);
+    setMiss({ x, y });
+    setTimeout(() => setMiss(null), 600);
+    if (timerEnabled) setSecondsLeft((s) => Math.max(0, s - 3));
   };
 
   const useHint = () => {
@@ -144,12 +205,13 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
     if (remaining.length === 0) return;
     const pick = remaining[Math.floor(Math.random() * remaining.length)];
     setHintId(pick.id);
-    setHintsLeft((h) => h - 1);
+    setHintsLeft((n) => n - 1);
     setTimeout(() => setHintId(null), 2500);
   };
 
   const restart = () => {
     setFound([]);
+    setBonusFound([]);
     setMisses(0);
     setSecondsLeft(START_SECONDS);
     setHintsLeft(START_HINTS);
@@ -181,6 +243,13 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
     border: "3px solid #4c1d95",
     background: "linear-gradient(#a78bfa, #6d28d9)",
     boxShadow: "0 4px 0 #4c1d95",
+  };
+  const chip: React.CSSProperties = {
+    color: "#ffffff",
+    padding: "6px 16px",
+    borderRadius: 12,
+    fontSize: 17,
+    fontWeight: 800,
   };
 
   return (
@@ -218,7 +287,7 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
             justifyContent: "space-between",
             alignItems: "center",
             gap: 8,
-            marginBottom: 14,
+            marginBottom: 10,
             flexWrap: "wrap",
           }}
         >
@@ -242,6 +311,13 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
           </div>
         </div>
 
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ ...chip, background: "#92400e" }}>Points: {points}</div>
+          {bonus.length > 0 && (
+            <div style={{ ...chip, background: "#ca8a04" }}>Bonus: {bonusFound.length}</div>
+          )}
+        </div>
+
         <div style={{ position: "relative" }}>
           {imgError ? (
             <div
@@ -256,9 +332,9 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
                 color: "#7f1d1d",
               }}
             >
-              Picture not found: {imageFile}
+              Picture not found
               <div style={{ fontSize: 15, marginTop: 8, fontWeight: 600 }}>
-                Check that this file is in the public folder of your repo.
+                Check that the picture files are in the public folder of your repo.
               </div>
             </div>
           ) : (
@@ -276,14 +352,14 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
               }}
             >
               <img
-                src={imageFile}
+                src={image}
                 alt="Spot the difference puzzle"
                 onError={() => setImgError(true)}
                 draggable={false}
                 style={{ width: "100%", display: "block", userSelect: "none" }}
               />
               <svg
-                viewBox={"0 0 " + IMG_W + " " + IMG_H}
+                viewBox={"0 0 " + w + " " + h}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -301,9 +377,24 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
                         key={"f" + s.id + "-" + i}
                         cx={p[0]}
                         cy={p[1]}
-                        r={HIT_RADIUS}
+                        r={RING_R}
                         fill="rgba(34,197,94,0.25)"
                         stroke="#16a34a"
+                        strokeWidth="6"
+                      />
+                    ))
+                  )}
+                {bonus
+                  .filter((s) => bonusFound.includes(s.id))
+                  .map((s) =>
+                    [s.l, s.r].map((p, i) => (
+                      <circle
+                        key={"b" + s.id + "-" + i}
+                        cx={p[0]}
+                        cy={p[1]}
+                        r={RING_R}
+                        fill="rgba(250,204,21,0.3)"
+                        stroke="#eab308"
                         strokeWidth="6"
                       />
                     ))
@@ -316,7 +407,7 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
                         key={"h" + s.id + "-" + i}
                         cx={p[0]}
                         cy={p[1]}
-                        r={HIT_RADIUS + 8}
+                        r={RING_R + 8}
                         fill="none"
                         stroke="#facc15"
                         strokeWidth="6"
@@ -336,6 +427,20 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
                     textAnchor="middle"
                   >
                     X
+                  </text>
+                )}
+                {flash && (
+                  <text
+                    x={flash.x}
+                    y={flash.y - 20}
+                    fontSize="44"
+                    fontWeight="bold"
+                    fill="#ca8a04"
+                    stroke="#ffffff"
+                    strokeWidth="2"
+                    textAnchor="middle"
+                  >
+                    {"+" + POINTS_BONUS + " Bonus!"}
                   </text>
                 )}
               </svg>
@@ -398,6 +503,10 @@ export const GameScreen: React.FC<GameProps> = ({ puzzle, timerEnabled, onBack }
                 {"★".repeat(stars)}{"☆".repeat(3 - stars)}
               </div>
             )}
+            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
+              Points: {points}
+              {bonusFound.length > 0 ? "  (" + bonusFound.length + " bonus found!)" : ""}
+            </div>
             <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
               <button style={orange} onClick={restart}>Play Again</button>
               <button style={purple} onClick={onBack}>Back</button>
